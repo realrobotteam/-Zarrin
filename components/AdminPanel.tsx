@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
   Users, Settings, ShieldAlert, CheckCircle, XCircle, 
-  CreditCard, DollarSign, Activity, Lock, Unlock
+  CreditCard, DollarSign, Activity, Lock, Unlock, Edit2, X
 } from 'lucide-react';
 import { User, UserStatus, TransferRequest, NotificationType } from '../types';
 import { MOCK_USER } from '../constants';
@@ -19,6 +19,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNotify }) => {
     { id: 'u3', name: 'مریم نوری', phone: '09121110000', status: UserStatus.APPROVED, balanceIRR: 5000000, balanceGold: 2.5, debtIRR: 0, creditIRR: 0 }
   ]);
   const [isHalted, setIsHalted] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const approveUser = (id: string) => {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, status: UserStatus.APPROVED } : u));
@@ -29,6 +30,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNotify }) => {
     const newState = !isHalted;
     setIsHalted(newState);
     onNotify(newState ? "تمامی معاملات متوقف شدند." : "معاملات مجدداً فعال شدند.", newState ? "error" : "success");
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUser({ ...user });
+  };
+
+  const handleSaveUser = () => {
+    if (!editingUser) return;
+    setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
+    setEditingUser(null);
+    onNotify("اطلاعات کاربر با موفقیت به‌روزرسانی شد.", "success");
   };
 
   return (
@@ -73,40 +85,115 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNotify }) => {
           <table className="w-full text-right">
             <thead>
               <tr className="bg-slate-900 text-slate-400 text-sm">
-                <th className="p-4">نام</th>
-                <th className="p-4">شماره تماس</th>
-                <th className="p-4">موجودی (ریال)</th>
-                <th className="p-4">موجودی (طلا)</th>
-                <th className="p-4">وضعیت</th>
-                <th className="p-4">عملیات</th>
+                <th className="p-4 text-center">نام</th>
+                <th className="p-4 text-center">شماره تماس</th>
+                <th className="p-4 text-center">موجودی (ریال)</th>
+                <th className="p-4 text-center">موجودی (طلا)</th>
+                <th className="p-4 text-center">وضعیت</th>
+                <th className="p-4 text-center">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
               {users.map(u => (
                 <tr key={u.id} className="hover:bg-slate-700/20 transition-colors">
-                  <td className="p-4">{u.name}</td>
-                  <td className="p-4 font-mono">{u.phone}</td>
-                  <td className="p-4">{u.balanceIRR.toLocaleString()}</td>
-                  <td className="p-4">{u.balanceGold} گرم</td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded-full text-[10px] ${u.status === UserStatus.APPROVED ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                      {u.status === UserStatus.APPROVED ? 'تایید شده' : 'در انتظار'}
+                  <td className="p-4 text-center">{u.name}</td>
+                  <td className="p-4 text-center font-mono">{u.phone}</td>
+                  <td className="p-4 text-center">{u.balanceIRR.toLocaleString()}</td>
+                  <td className="p-4 text-center">{u.balanceGold} گرم</td>
+                  <td className="p-4 text-center">
+                    <span className={`px-2 py-1 rounded-full text-[10px] ${
+                      u.status === UserStatus.APPROVED ? 'bg-emerald-500/10 text-emerald-500' : 
+                      u.status === UserStatus.REJECTED ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'
+                    }`}>
+                      {u.status === UserStatus.APPROVED ? 'تایید شده' : u.status === UserStatus.REJECTED ? 'رد شده' : 'در انتظار'}
                     </span>
                   </td>
-                  <td className="p-4">
-                    {u.status === UserStatus.PENDING && (
+                  <td className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-2">
                       <button 
-                        onClick={() => approveUser(u.id)}
-                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded transition-colors shadow-lg shadow-emerald-900/10"
+                        onClick={() => handleEditUser(u)}
+                        className="p-1.5 bg-slate-700 hover:bg-slate-600 text-amber-500 rounded-lg transition-colors"
+                        title="ویرایش کاربر"
                       >
-                        تایید حساب
+                        <Edit2 size={14} />
                       </button>
-                    )}
+                      {u.status === UserStatus.PENDING && (
+                        <button 
+                          onClick={() => approveUser(u.id)}
+                          className="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded transition-colors shadow-lg shadow-emerald-900/10"
+                        >
+                          تایید سریع
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center">
+              <h3 className="text-amber-500 font-bold flex items-center gap-2">
+                <Edit2 size={18} /> ویرایش اطلاعات کاربر
+              </h3>
+              <button onClick={() => setEditingUser(null)} className="text-slate-500 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">نام و نام خانوادگی</label>
+                <input 
+                  type="text" 
+                  value={editingUser.name}
+                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 focus:border-amber-500 outline-none text-slate-100 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">شماره تماس</label>
+                <input 
+                  type="text" 
+                  value={editingUser.phone}
+                  onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 focus:border-amber-500 outline-none text-slate-100 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">وضعیت حساب</label>
+                <select 
+                  value={editingUser.status}
+                  onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value as UserStatus })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 focus:border-amber-500 outline-none text-slate-100 text-sm"
+                >
+                  <option value={UserStatus.PENDING}>در انتظار تایید</option>
+                  <option value={UserStatus.APPROVED}>تایید شده</option>
+                  <option value={UserStatus.REJECTED}>مسدود / رد شده</option>
+                </select>
+              </div>
+              
+              <div className="pt-4 flex gap-3">
+                <button 
+                  onClick={handleSaveUser}
+                  className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-900/20"
+                >
+                  ذخیره تغییرات
+                </button>
+                <button 
+                  onClick={() => setEditingUser(null)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-all border border-slate-700"
+                >
+                  انصراف
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
