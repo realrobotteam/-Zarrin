@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, TrendingDown, Wallet, History as HistoryIcon, 
-  Clock, ShieldCheck, AlertCircle, RefreshCw, BarChart3, Info
+  Clock, ShieldCheck, AlertCircle, RefreshCw, BarChart3, Info, AlertTriangle
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, 
@@ -27,6 +27,15 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
   const [tradeAmount, setTradeAmount] = useState<string>('');
   const [notifications, setNotifications] = useState<{id: number, msg: string}[]>([]);
 
+  // Real-time calculation for visual feedback
+  const parsedAmount = parseFloat(tradeAmount) || 0;
+  
+  const buyCost = useMemo(() => parsedAmount * (prices.sell / 4.3318), [parsedAmount, prices.sell]);
+  const sellValue = useMemo(() => parsedAmount * (prices.buy / 4.3318), [parsedAmount, prices.buy]);
+
+  const hasInsufficientRial = buyCost > user.balanceIRR;
+  const hasInsufficientGold = parsedAmount > user.balanceGold;
+
   // Price Simulation
   useEffect(() => {
     if (isFrozen) return;
@@ -49,13 +58,10 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       setAnalysis(result);
     };
 
-    // Initial fetch
     fetchAnalysis();
-
-    // Refresh analysis every 5 minutes only, instead of reacting to price fluctuations
     const analysisInterval = setInterval(fetchAnalysis, 300000);
     return () => clearInterval(analysisInterval);
-  }, []); // Only run on mount and then use internal interval
+  }, []);
 
   const addNotification = (msg: string) => {
     const id = Date.now();
@@ -88,11 +94,11 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
     const totalCost = amount * (currentRate / 4.3318);
     
     if (type === TransactionType.BUY && user.balanceIRR < totalCost) {
-      addNotification("موجودی ریالی کافی نیست!");
+      addNotification("خطا: موجودی ریالی کافی نیست!");
       return;
     }
     if (type === TransactionType.SELL && user.balanceGold < amount) {
-      addNotification("موجودی طلایی کافی نیست!");
+      addNotification("خطا: موجودی طلایی کافی نیست!");
       return;
     }
 
@@ -124,24 +130,34 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
       {/* Wallet Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl hover:border-amber-500/30 transition-all">
+        <div className={`bg-slate-800 border p-6 rounded-2xl shadow-xl transition-all ${hasInsufficientRial && parsedAmount > 0 ? 'border-rose-500 ring-1 ring-rose-500/20' : 'border-slate-700 hover:border-amber-500/30'}`}>
           <div className="flex items-center justify-between mb-4">
             <span className="text-slate-400 text-xs font-bold">موجودی ریالی</span>
-            <Wallet className="text-amber-500" size={18} />
+            <Wallet className={hasInsufficientRial && parsedAmount > 0 ? 'text-rose-500' : 'text-amber-500'} size={18} />
           </div>
-          <div className="text-2xl font-black text-amber-100 font-mono">
+          <div className={`text-2xl font-black font-mono ${hasInsufficientRial && parsedAmount > 0 ? 'text-rose-400' : 'text-amber-100'}`}>
             {user.balanceIRR.toLocaleString()} <span className="text-[10px] text-amber-500">ریال</span>
           </div>
+          {hasInsufficientRial && parsedAmount > 0 && (
+            <div className="text-[9px] text-rose-500 mt-2 flex items-center gap-1">
+              <AlertTriangle size={10} /> موجودی ریالی برای این خرید کافی نیست
+            </div>
+          )}
         </div>
 
-        <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl hover:border-amber-500/30 transition-all">
+        <div className={`bg-slate-800 border p-6 rounded-2xl shadow-xl transition-all ${hasInsufficientGold && parsedAmount > 0 ? 'border-rose-500 ring-1 ring-rose-500/20' : 'border-slate-700 hover:border-amber-500/30'}`}>
           <div className="flex items-center justify-between mb-4">
             <span className="text-slate-400 text-xs font-bold">موجودی طلایی</span>
-            <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg shadow-amber-500/50" />
+            <div className={`w-4 h-4 rounded-full shadow-lg ${hasInsufficientGold && parsedAmount > 0 ? 'bg-rose-500 shadow-rose-500/50' : 'bg-amber-500 shadow-amber-500/50'}`} />
           </div>
-          <div className="text-2xl font-black text-amber-100 font-mono">
+          <div className={`text-2xl font-black font-mono ${hasInsufficientGold && parsedAmount > 0 ? 'text-rose-400' : 'text-amber-100'}`}>
             {user.balanceGold.toFixed(3)} <span className="text-[10px] text-amber-500">گرم</span>
           </div>
+          {hasInsufficientGold && parsedAmount > 0 && (
+            <div className="text-[9px] text-rose-500 mt-2 flex items-center gap-1">
+              <AlertTriangle size={10} /> موجودی طلایی برای این فروش کافی نیست
+            </div>
+          )}
         </div>
 
         <div className="bg-gradient-to-br from-amber-600 to-amber-800 p-6 rounded-2xl shadow-xl text-white">
@@ -157,18 +173,12 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left: Charts & History Snippet */}
         <div className="lg:col-span-3 space-y-6">
           <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold flex items-center gap-2">
                 <BarChart3 className="text-amber-500" size={20} /> روند بازار
               </h3>
-              <div className="flex gap-2 text-[10px]">
-                <button className="bg-slate-700 px-3 py-1 rounded hover:bg-slate-600">۱س</button>
-                <button className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-3 py-1 rounded">۱ر</button>
-                <button className="bg-slate-700 px-3 py-1 rounded hover:bg-slate-600">۱ه</button>
-              </div>
             </div>
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -200,7 +210,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
           </div>
         </div>
 
-        {/* Right: Real-time Trade Board */}
         <div className="space-y-6">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 relative overflow-hidden">
             <div className="flex justify-between items-center text-[10px]">
@@ -231,27 +240,55 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
             <h3 className="font-bold text-slate-200 flex items-center gap-2">
               <TrendingUp size={18} className="text-amber-500" /> ثبت معامله سریع
             </h3>
+            
             <div className="relative">
               <input 
                 type="number"
                 placeholder="وزن طلا به گرم..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 pr-10 focus:ring-1 focus:ring-amber-500 outline-none text-amber-100 transition-all"
+                className={`w-full bg-slate-900 border rounded-xl p-3 pr-10 outline-none text-amber-100 transition-all ${
+                  (hasInsufficientRial || hasInsufficientGold) && parsedAmount > 0 
+                    ? 'border-rose-500 focus:ring-1 focus:ring-rose-500' 
+                    : 'border-slate-700 focus:ring-1 focus:ring-amber-500'
+                }`}
                 value={tradeAmount}
                 onChange={(e) => setTradeAmount(e.target.value)}
               />
               <span className="absolute left-3 top-3.5 text-slate-500 text-[10px]">G</span>
             </div>
 
+            {parsedAmount > 0 && (
+              <div className="space-y-1 px-1">
+                <div className={`flex justify-between text-[10px] ${hasInsufficientRial ? 'text-rose-400' : 'text-slate-500'}`}>
+                  <span>برآورد هزینه خرید:</span>
+                  <span className="font-mono">{buyCost.toLocaleString(undefined, {maximumFractionDigits:0})} ریال</span>
+                </div>
+                <div className={`flex justify-between text-[10px] ${hasInsufficientGold ? 'text-rose-400' : 'text-slate-500'}`}>
+                  <span>برآورد ارزش فروش:</span>
+                  <span className="font-mono">{sellValue.toLocaleString(undefined, {maximumFractionDigits:0})} ریال</span>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => executeTrade(TransactionType.BUY)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black py-3 rounded-xl transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
+                disabled={hasInsufficientRial && parsedAmount > 0}
+                className={`text-slate-900 font-black py-3 rounded-xl transition-all shadow-lg active:scale-95 ${
+                  hasInsufficientRial && parsedAmount > 0 
+                    ? 'bg-slate-700 cursor-not-allowed opacity-50' 
+                    : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20'
+                }`}
               >
                 خرید
               </button>
               <button 
                 onClick={() => executeTrade(TransactionType.SELL)}
-                className="bg-rose-600 hover:bg-rose-500 text-slate-900 font-black py-3 rounded-xl transition-all shadow-lg shadow-rose-900/20 active:scale-95"
+                disabled={hasInsufficientGold && parsedAmount > 0}
+                className={`text-slate-900 font-black py-3 rounded-xl transition-all shadow-lg active:scale-95 ${
+                  hasInsufficientGold && parsedAmount > 0 
+                    ? 'bg-slate-700 cursor-not-allowed opacity-50' 
+                    : 'bg-rose-600 hover:bg-rose-500 shadow-rose-900/20'
+                }`}
               >
                 فروش
               </button>
@@ -275,8 +312,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       {/* Notifications */}
       <div className="fixed bottom-6 right-6 z-50 space-y-3">
         {notifications.map(n => (
-          <div key={n.id} className="bg-slate-900 border-r-4 border-amber-500 p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300">
-            <Info className="text-amber-500" size={18} />
+          <div key={n.id} className={`border-r-4 p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300 ${n.msg.includes('خطا') ? 'bg-rose-950/90 border-rose-500' : 'bg-slate-900 border-amber-500'}`}>
+            {n.msg.includes('خطا') ? <AlertTriangle className="text-rose-500" size={18} /> : <Info className="text-amber-500" size={18} />}
             <span className="text-xs font-medium text-slate-200">{n.msg}</span>
           </div>
         ))}
