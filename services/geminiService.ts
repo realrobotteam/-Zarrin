@@ -1,61 +1,76 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Chat } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const AI_ANALYSIS_MODEL = 'gemini-3-flash-preview';
+const CHAT_MODEL = 'gemini-3-pro-preview';
+const CACHE_KEY = 'zarin_gold_analysis_cache';
+const COOLDOWN_KEY = 'zarin_gold_api_cooldown';
+const REQUEST_INTERVAL = 15 * 60 * 1000; 
+const ERROR_COOLDOWN = 30 * 60 * 1000; 
 
-// Simple cache to store the last successful analysis
-let cachedAnalysis: string | null = null;
-let lastRequestTime = 0;
-let backoffUntil = 0;
-let isQuotaExhausted = false;
+interface AnalysisCache {
+  text: string;
+  timestamp: number;
+  price: number;
+}
 
-export async function getMarketAnalysis(currentPrice: number) {
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+
+/**
+ * Provides automated market sentiment analysis for the dashboard.
+ */
+export async function getMarketAnalysis(currentPrice: number): Promise<string> {
   const now = Date.now();
+  const cooldownEnd = parseInt(localStorage.getItem(COOLDOWN_KEY) || '0');
+  if (now < cooldownEnd) return "سرویس تحلیل هوشمند در حالت استراحت است.";
 
-  // If we've confirmed quota exhaustion, don't even try for 10 minutes
-  if (isQuotaExhausted && now < backoffUntil) {
-    return cachedAnalysis || "سرویس تحلیل هوشمند به دلیل محدودیت سهمیه موقتاً در دسترس نیست.";
-  }
-
-  // If we are in a backoff period, return cache
-  if (now < backoffUntil) {
-    return cachedAnalysis || "تحلیل بازار در فواصل زمانی بلندتر به‌روزرسانی می‌شود.";
-  }
-
-  // Strict throttling: No more than one request every 2 minutes
-  if (now - lastRequestTime < 120000 && cachedAnalysis) {
-    return cachedAnalysis;
-  }
+  const cached = getLocalCache();
+  if (cached && (now - cached.timestamp < REQUEST_INTERVAL)) return cached.text;
 
   try {
-    lastRequestTime = now;
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Price: ${currentPrice} IRR. Provide a very brief (max 20 words) market analysis for gold traders in Persian. Focus on sentiment.`,
+      model: AI_ANALYSIS_MODEL,
+      contents: `Current Gold Price: ${currentPrice} IRR. Brief market sentiment in Persian. Max 15 words.`,
     });
 
     const text = response.text;
     if (text) {
-      cachedAnalysis = text;
-      isQuotaExhausted = false; // Reset if successful
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ text, timestamp: now, price: currentPrice }));
       return text;
     }
-    return cachedAnalysis || "تحلیل جدید یافت نشد.";
+    return cached?.text || "تحلیل در دسترس نیست.";
   } catch (error: any) {
-    console.error("Gemini API Error details:", error);
-    
-    const errorStr = JSON.stringify(error).toLowerCase();
-    const isRateLimit = errorStr.includes("429") || errorStr.includes("resource_exhausted") || errorStr.includes("quota");
-
-    if (isRateLimit) {
-      isQuotaExhausted = true;
-      // Back off for 10 minutes if we hit quota
-      backoffUntil = now + 600000;
-      return cachedAnalysis || "سهمیه روزانه تحلیل هوشمند به پایان رسیده است. لطفاً بعداً مراجعه کنید.";
+    if (JSON.stringify(error).includes("429")) {
+      localStorage.setItem(COOLDOWN_KEY, (now + ERROR_COOLDOWN).toString());
     }
+    return cached?.text || "خطا در ارتباط با هوش مصنوعی.";
+  }
+}
 
-    // General error backoff for 1 minute
-    backoffUntil = now + 60000;
-    return cachedAnalysis || "خطا در دریافت تحلیل. در حال استفاده از داده‌های ذخیره شده...";
+/**
+ * Creates a new chat session for the interactive chatbot.
+ */
+export function createChatSession(): Chat {
+  return ai.chats.create({
+    model: CHAT_MODEL,
+    config: {
+      systemInstruction: `شما دستیار هوشمند و مشاور تحلیلی سامانه معاملات طلای "زرین" هستید. 
+      وظایف شما:
+      1. پاسخ به سوالات کاربران درباره روند بازار طلا و سکه.
+      2. راهنمایی کاربران برای استفاده از بخش‌های مختلف اپلیکیشن (مانند ثبت حواله، فریز قیمت و مشاهده تاریخچه).
+      3. ارائه تحلیل‌های منطقی و مودبانه به زبان فارسی.
+      4. نام شما "دستیار زرین" است. همیشه حرفه‌ای و دلگرم‌کننده پاسخ دهید. 
+      از ایموجی‌های مرتبط با طلا (🪙، 💰، 📈) به شکلی محدود و زیبا استفاده کنید.`,
+      temperature: 0.7,
+    }
+  });
+}
+
+function getLocalCache(): AnalysisCache | null {
+  try {
+    const data = localStorage.getItem(CACHE_KEY);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
   }
 }

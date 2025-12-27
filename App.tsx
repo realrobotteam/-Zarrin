@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
 import History from './components/History';
 import Transfers from './components/Transfers';
+import ChatBot from './components/ChatBot';
 import { Transaction, TransferRequest, UserStatus } from './types';
 import { MOCK_USER } from './constants';
 
@@ -95,6 +96,8 @@ const App: React.FC = () => {
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
+
+        <ChatBot />
 
         <footer className="bg-slate-900 border-t border-slate-800 py-8 px-4 text-center">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-[10px]">

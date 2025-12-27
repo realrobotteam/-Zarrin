@@ -23,20 +23,17 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
   const [prices, setPrices] = useState<GoldPrice>(INITIAL_PRICE);
   const [freezeTime, setFreezeTime] = useState(0);
   const [isFrozen, setIsFrozen] = useState(false);
-  const [analysis, setAnalysis] = useState<string>('در حال آماده‌سازی تحلیل بازار...');
+  const [analysis, setAnalysis] = useState<string>('در حال دریافت تحلیل بازار...');
   const [tradeAmount, setTradeAmount] = useState<string>('');
   const [notifications, setNotifications] = useState<{id: number, msg: string}[]>([]);
 
-  // Real-time calculation for visual feedback
   const parsedAmount = parseFloat(tradeAmount) || 0;
-  
   const buyCost = useMemo(() => parsedAmount * (prices.sell / 4.3318), [parsedAmount, prices.sell]);
   const sellValue = useMemo(() => parsedAmount * (prices.buy / 4.3318), [parsedAmount, prices.buy]);
 
   const hasInsufficientRial = buyCost > user.balanceIRR;
   const hasInsufficientGold = parsedAmount > user.balanceGold;
 
-  // Price Simulation
   useEffect(() => {
     if (isFrozen) return;
     const interval = setInterval(() => {
@@ -51,7 +48,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
     return () => clearInterval(interval);
   }, [isFrozen]);
 
-  // Frequency-limited AI analysis
   useEffect(() => {
     const fetchAnalysis = async () => {
       const result = await getMarketAnalysis(prices.buy);
@@ -59,7 +55,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
     };
 
     fetchAnalysis();
-    const analysisInterval = setInterval(fetchAnalysis, 300000);
+    // Fetch every 10 minutes (slightly less than the 15min service throttle to ensure freshness when allowed)
+    const analysisInterval = setInterval(fetchAnalysis, 600000);
     return () => clearInterval(analysisInterval);
   }, []);
 
@@ -128,7 +125,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-      {/* Wallet Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className={`bg-slate-800 border p-6 rounded-2xl shadow-xl transition-all ${hasInsufficientRial && parsedAmount > 0 ? 'border-rose-500 ring-1 ring-rose-500/20' : 'border-slate-700 hover:border-amber-500/30'}`}>
           <div className="flex items-center justify-between mb-4">
