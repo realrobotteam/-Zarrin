@@ -1,20 +1,24 @@
 
 import React, { useState } from 'react';
 import { Send, Clock, CheckCircle, AlertCircle, Upload, CreditCard } from 'lucide-react';
-import { TransferRequest } from '../types';
+import { TransferRequest, NotificationType } from '../types';
 
 interface TransfersProps {
   onAddRequest: (req: TransferRequest) => void;
+  onNotify: (message: string, type?: NotificationType) => void;
   requests: TransferRequest[];
 }
 
-const Transfers: React.FC<TransfersProps> = ({ onAddRequest, requests }) => {
+const Transfers: React.FC<TransfersProps> = ({ onAddRequest, onNotify, requests }) => {
   const [amount, setAmount] = useState('');
   const [code, setCode] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !code) return;
+    if (!amount || !code) {
+      onNotify("لطفا تمام فیلدها را پر کنید.", "error");
+      return;
+    }
 
     const newReq: TransferRequest = {
       id: `req-${Date.now()}`,
@@ -29,7 +33,7 @@ const Transfers: React.FC<TransfersProps> = ({ onAddRequest, requests }) => {
     onAddRequest(newReq);
     setAmount('');
     setCode('');
-    alert('حواله شما ثبت شد و در صف تایید قرار گرفت.');
+    onNotify('حواله شما با موفقیت ثبت شد و در صف تایید قرار گرفت.', "success");
   };
 
   return (

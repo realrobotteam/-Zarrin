@@ -10,7 +10,7 @@ import {
   Tooltip, ResponsiveContainer, AreaChart, Area,
   ComposedChart, Bar, Cell
 } from 'recharts';
-import { User, GoldPrice, Transaction, TransactionType } from '../types';
+import { User, GoldPrice, Transaction, TransactionType, NotificationType } from '../types';
 import { INITIAL_PRICE, MOCK_USER, CHART_DATA } from '../constants';
 import { getMarketAnalysis } from '../services/geminiService';
 
@@ -18,6 +18,7 @@ interface DashboardProps {
   isAdmin: boolean;
   transactions: Transaction[];
   onAddTransaction: (tx: Transaction) => void;
+  onNotify: (message: string, type?: NotificationType) => void;
 }
 
 const Candlestick = (props: any) => {
@@ -50,14 +51,13 @@ const Candlestick = (props: any) => {
   );
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTransaction }) => {
+const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTransaction, onNotify }) => {
   const [user, setUser] = useState<User>(MOCK_USER);
   const [prices, setPrices] = useState<GoldPrice>(INITIAL_PRICE);
   const [freezeTime, setFreezeTime] = useState(0);
   const [isFrozen, setIsFrozen] = useState(false);
   const [analysis, setAnalysis] = useState<string>('در حال دریافت تحلیل بازار...');
   const [tradeAmount, setTradeAmount] = useState<string>('');
-  const [notifications, setNotifications] = useState<{id: number, msg: string}[]>([]);
   const [chartType, setChartType] = useState<'area' | 'candle'>('area');
   const [timeRange, setTimeRange] = useState('1D');
 
@@ -92,15 +92,10 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
     return () => clearInterval(analysisInterval);
   }, []);
 
-  const addNotification = (msg: string) => {
-    const id = Date.now();
-    setNotifications(prev => [{id, msg}, ...prev]);
-    setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
-  };
-
   const handleFreeze = () => {
     setIsFrozen(true);
     setFreezeTime(10);
+    onNotify("قیمت به مدت ۱۰ ثانیه فریز شد.", "warning");
   };
 
   useEffect(() => {
@@ -115,17 +110,17 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
   const executeTrade = (type: TransactionType) => {
     const amount = parseFloat(tradeAmount);
     if (!amount || amount <= 0) {
-      addNotification("لطفاً مقدار معتبر وارد کنید.");
+      onNotify("لطفاً مقدار معتبر وارد کنید.", "error");
       return;
     }
     const currentRate = type === TransactionType.BUY ? prices.sell : prices.buy;
     const totalCost = amount * (currentRate / 4.3318);
     if (type === TransactionType.BUY && user.balanceIRR < totalCost) {
-      addNotification("خطا: موجودی ریالی کافی نیست!");
+      onNotify("خطا: موجودی ریالی کافی نیست!", "error");
       return;
     }
     if (type === TransactionType.SELL && user.balanceGold < amount) {
-      addNotification("خطا: موجودی طلایی کافی نیست!");
+      onNotify("خطا: موجودی طلایی کافی نیست!", "error");
       return;
     }
     const newBalanceGold = type === TransactionType.BUY ? user.balanceGold + amount : user.balanceGold - amount;
@@ -144,7 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
     };
     onAddTransaction(newTx);
     setUser(prev => ({ ...prev, balanceIRR: newBalanceIRR, balanceGold: newBalanceGold }));
-    addNotification(`معامله ${type === TransactionType.BUY ? 'خرید' : 'فروش'} با موفقیت انجام شد.`);
+    onNotify(`معامله ${type === TransactionType.BUY ? 'خرید' : 'فروش'} با موفقیت انجام شد.`, "success");
     setTradeAmount('');
     setIsFrozen(false);
     setFreezeTime(0);
@@ -397,15 +392,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="fixed bottom-6 right-6 z-50 space-y-3">
-        {notifications.map(n => (
-          <div key={n.id} className={`border-r-4 p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300 ${n.msg.includes('خطا') ? 'bg-rose-950/90 border-rose-500' : 'bg-slate-900 border-amber-500'}`}>
-            {n.msg.includes('خطا') ? <AlertTriangle className="text-rose-500" size={18} /> : <Info className="text-amber-500" size={18} />}
-            <span className="text-xs font-medium text-slate-200">{n.msg}</span>
-          </div>
-        ))}
       </div>
     </div>
   );

@@ -1,13 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
-import { LayoutDashboard, ShieldCheck, UserCircle, LogOut, Menu, X, Coins, History as HistoryIcon, CreditCard } from 'lucide-react';
+import { LayoutDashboard, ShieldCheck, UserCircle, LogOut, Menu, X, Coins, History as HistoryIcon, CreditCard, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
 import History from './components/History';
 import Transfers from './components/Transfers';
 import ChatBot from './components/ChatBot';
-import { Transaction, TransferRequest, UserStatus } from './types';
+import { Transaction, TransferRequest, UserStatus, AppNotification, NotificationType } from './types';
 import { MOCK_USER } from './constants';
 
 const App: React.FC = () => {
@@ -15,6 +15,15 @@ const App: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<TransferRequest[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  const addNotification = useCallback((message: string, type: NotificationType = 'info') => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  }, []);
 
   const handleAddTransaction = (tx: Transaction) => {
     setTransactions(prev => [tx, ...prev]);
@@ -22,6 +31,10 @@ const App: React.FC = () => {
 
   const handleAddTransfer = (req: TransferRequest) => {
     setTransfers(prev => [req, ...prev]);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
   return (
@@ -90,14 +103,40 @@ const App: React.FC = () => {
 
         <main className="flex-grow pb-12">
           <Routes>
-            <Route path="/" element={isAdmin ? <AdminPanel /> : <Dashboard isAdmin={false} transactions={transactions} onAddTransaction={handleAddTransaction} />} />
+            <Route path="/" element={isAdmin ? <AdminPanel onNotify={addNotification} /> : <Dashboard isAdmin={false} transactions={transactions} onAddTransaction={handleAddTransaction} onNotify={addNotification} />} />
             <Route path="/history" element={<History transactions={transactions} />} />
-            <Route path="/transfers" element={<Transfers requests={transfers} onAddRequest={handleAddTransfer} />} />
+            <Route path="/transfers" element={<Transfers requests={transfers} onAddRequest={handleAddTransfer} onNotify={addNotification} />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
 
         <ChatBot />
+
+        {/* Global Notifications Container */}
+        <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-3 pointer-events-none">
+          {notifications.map(n => (
+            <div 
+              key={n.id} 
+              className={`pointer-events-auto min-w-[280px] max-w-sm p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-right duration-300 border-r-4 ${
+                n.type === 'error' ? 'bg-rose-950/90 border-rose-500 text-rose-100' :
+                n.type === 'success' ? 'bg-emerald-950/90 border-emerald-500 text-emerald-100' :
+                n.type === 'warning' ? 'bg-amber-950/90 border-amber-500 text-amber-100' :
+                'bg-slate-900 border-blue-500 text-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {n.type === 'error' && <XCircle size={20} className="text-rose-500 shrink-0" />}
+                {n.type === 'success' && <CheckCircle size={20} className="text-emerald-500 shrink-0" />}
+                {n.type === 'warning' && <AlertTriangle size={20} className="text-amber-500 shrink-0" />}
+                {n.type === 'info' && <Info size={20} className="text-blue-500 shrink-0" />}
+                <span className="text-xs font-medium">{n.message}</span>
+              </div>
+              <button onClick={() => removeNotification(n.id)} className="text-slate-500 hover:text-white transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
 
         <footer className="bg-slate-900 border-t border-slate-800 py-8 px-4 text-center">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-[10px]">

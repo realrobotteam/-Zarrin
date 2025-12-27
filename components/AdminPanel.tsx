@@ -4,12 +4,15 @@ import {
   Users, Settings, ShieldAlert, CheckCircle, XCircle, 
   CreditCard, DollarSign, Activity, Lock, Unlock
 } from 'lucide-react';
-import { User, UserStatus, TransferRequest } from '../types';
+import { User, UserStatus, TransferRequest, NotificationType } from '../types';
 import { MOCK_USER } from '../constants';
 
-const AdminPanel: React.FC = () => {
+interface AdminPanelProps {
+  onNotify: (message: string, type?: NotificationType) => void;
+}
+
+const AdminPanel: React.FC<AdminPanelProps> = ({ onNotify }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'transfers' | 'settings'>('users');
-  // Added debtIRR and creditIRR to mock user objects to match User interface
   const [users, setUsers] = useState<User[]>([
     MOCK_USER,
     { id: 'u2', name: 'رضا سهرابی', phone: '09351112233', status: UserStatus.PENDING, balanceIRR: 0, balanceGold: 0, debtIRR: 0, creditIRR: 0 },
@@ -19,6 +22,13 @@ const AdminPanel: React.FC = () => {
 
   const approveUser = (id: string) => {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, status: UserStatus.APPROVED } : u));
+    onNotify("حساب کاربری با موفقیت تایید شد.", "success");
+  };
+
+  const toggleHalt = () => {
+    const newState = !isHalted;
+    setIsHalted(newState);
+    onNotify(newState ? "تمامی معاملات متوقف شدند." : "معاملات مجدداً فعال شدند.", newState ? "error" : "success");
   };
 
   return (
@@ -29,7 +39,7 @@ const AdminPanel: React.FC = () => {
           <p className="text-slate-400 text-sm">مدیریت کاربران، تراکنش‌ها و تنظیمات سیستمی</p>
         </div>
         <button 
-          onClick={() => setIsHalted(!isHalted)}
+          onClick={toggleHalt}
           className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${isHalted ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white shadow-lg shadow-rose-900/20'}`}
         >
           {isHalted ? <Unlock size={20}/> : <Lock size={20}/>}
@@ -59,7 +69,7 @@ const AdminPanel: React.FC = () => {
       </div>
 
       {activeTab === 'users' && (
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
           <table className="w-full text-right">
             <thead>
               <tr className="bg-slate-900 text-slate-400 text-sm">
@@ -73,7 +83,7 @@ const AdminPanel: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-700">
               {users.map(u => (
-                <tr key={u.id} className="hover:bg-slate-700/20">
+                <tr key={u.id} className="hover:bg-slate-700/20 transition-colors">
                   <td className="p-4">{u.name}</td>
                   <td className="p-4 font-mono">{u.phone}</td>
                   <td className="p-4">{u.balanceIRR.toLocaleString()}</td>
@@ -87,7 +97,7 @@ const AdminPanel: React.FC = () => {
                     {u.status === UserStatus.PENDING && (
                       <button 
                         onClick={() => approveUser(u.id)}
-                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded"
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded transition-colors shadow-lg shadow-emerald-900/10"
                       >
                         تایید حساب
                       </button>
@@ -102,40 +112,50 @@ const AdminPanel: React.FC = () => {
 
       {activeTab === 'settings' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl space-y-4">
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl space-y-4 shadow-xl">
             <h3 className="font-bold mb-4 flex items-center gap-2"><Activity size={18} className="text-amber-500"/> تنظیم دستی قیمت</h3>
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-slate-400 block mb-1">حباب خرید (ریال)</label>
-                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none" placeholder="مثلا ۵۰,۰۰۰" />
+                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none text-amber-100" placeholder="مثلا ۵۰,۰۰۰" />
               </div>
               <div>
                 <label className="text-xs text-slate-400 block mb-1">حباب فروش (ریال)</label>
-                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none" placeholder="مثلا ۱۰۰,۰۰۰" />
+                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none text-amber-100" placeholder="مثلا ۱۰۰,۰۰۰" />
               </div>
-              <button className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-lg transition-all">به‌روزرسانی قیمت‌ها</button>
+              <button 
+                onClick={() => onNotify("قیمت‌ها با موفقیت به‌روزرسانی شدند.", "success")}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold py-2 rounded-lg transition-all shadow-lg shadow-amber-900/10"
+              >
+                به‌روزرسانی قیمت‌ها
+              </button>
             </div>
           </div>
 
-          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl space-y-4">
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl space-y-4 shadow-xl">
             <h3 className="font-bold mb-4 flex items-center gap-2"><ShieldAlert size={18} className="text-amber-500"/> محدودیت‌های معاملاتی</h3>
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-slate-400 block mb-1">سقف معامله تک (گرم)</label>
-                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none" defaultValue={500} />
+                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none text-amber-100" defaultValue={500} />
               </div>
               <div>
                 <label className="text-xs text-slate-400 block mb-1">حداقل موجودی برای فروش (ریال)</label>
-                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none" defaultValue={1000000} />
+                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:border-amber-500 outline-none text-amber-100" defaultValue={1000000} />
               </div>
-              <button className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-lg transition-all">ذخیره تغییرات</button>
+              <button 
+                onClick={() => onNotify("محدودیت‌ها ذخیره شدند.", "info")}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-lg transition-all"
+              >
+                ذخیره تغییرات
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {activeTab === 'transfers' && (
-        <div className="text-center py-20 bg-slate-800/30 rounded-2xl border border-dashed border-slate-700">
+        <div className="text-center py-20 bg-slate-800/30 rounded-2xl border border-dashed border-slate-700 shadow-inner">
            <p className="text-slate-500">حواله جدیدی برای بررسی وجود ندارد.</p>
         </div>
       )}

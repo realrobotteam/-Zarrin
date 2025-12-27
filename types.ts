@@ -54,3 +54,11 @@ export interface TransferRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   description?: string;
 }
+
+export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+
+export interface AppNotification {
+  id: string;
+  message: string;
+  type: NotificationType;
+}
