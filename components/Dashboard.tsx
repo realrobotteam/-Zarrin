@@ -2,11 +2,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, TrendingDown, Wallet, History as HistoryIcon, 
-  Clock, ShieldCheck, AlertCircle, RefreshCw, BarChart3, Info, AlertTriangle
+  Clock, ShieldCheck, AlertCircle, RefreshCw, BarChart3, Info, AlertTriangle,
+  BarChart, CandlestickChart as CandleIcon, AreaChart as AreaIcon
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, AreaChart, Area 
+  Tooltip, ResponsiveContainer, AreaChart, Area,
+  ComposedChart, Bar, Cell
 } from 'recharts';
 import { User, GoldPrice, Transaction, TransactionType } from '../types';
 import { INITIAL_PRICE, MOCK_USER, CHART_DATA } from '../constants';
@@ -18,6 +20,36 @@ interface DashboardProps {
   onAddTransaction: (tx: Transaction) => void;
 }
 
+const Candlestick = (props: any) => {
+  const { x, y, width, height, low, high, open, close } = props;
+  const isUp = close >= open;
+  const color = isUp ? '#10b981' : '#f43f5e';
+  
+  const ratio = height / Math.abs(open - close);
+  const wickTop = y + (open > close ? 0 : height) - (high - Math.max(open, close)) * ratio;
+  const wickBottom = y + (open > close ? height : 0) + (Math.min(open, close) - low) * ratio;
+
+  return (
+    <g>
+      <line
+        x1={x + width / 2}
+        y1={wickTop}
+        x2={x + width / 2}
+        y2={wickBottom}
+        stroke={color}
+        strokeWidth={1}
+      />
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={color}
+      />
+    </g>
+  );
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTransaction }) => {
   const [user, setUser] = useState<User>(MOCK_USER);
   const [prices, setPrices] = useState<GoldPrice>(INITIAL_PRICE);
@@ -26,6 +58,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
   const [analysis, setAnalysis] = useState<string>('در حال دریافت تحلیل بازار...');
   const [tradeAmount, setTradeAmount] = useState<string>('');
   const [notifications, setNotifications] = useState<{id: number, msg: string}[]>([]);
+  const [chartType, setChartType] = useState<'area' | 'candle'>('area');
+  const [timeRange, setTimeRange] = useState('1D');
 
   const parsedAmount = parseFloat(tradeAmount) || 0;
   const buyCost = useMemo(() => parsedAmount * (prices.sell / 4.3318), [parsedAmount, prices.sell]);
@@ -53,9 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       const result = await getMarketAnalysis(prices.buy);
       setAnalysis(result);
     };
-
     fetchAnalysis();
-    // Fetch every 10 minutes (slightly less than the 15min service throttle to ensure freshness when allowed)
     const analysisInterval = setInterval(fetchAnalysis, 600000);
     return () => clearInterval(analysisInterval);
   }, []);
@@ -86,10 +118,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       addNotification("لطفاً مقدار معتبر وارد کنید.");
       return;
     }
-
     const currentRate = type === TransactionType.BUY ? prices.sell : prices.buy;
     const totalCost = amount * (currentRate / 4.3318);
-    
     if (type === TransactionType.BUY && user.balanceIRR < totalCost) {
       addNotification("خطا: موجودی ریالی کافی نیست!");
       return;
@@ -98,10 +128,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       addNotification("خطا: موجودی طلایی کافی نیست!");
       return;
     }
-
     const newBalanceGold = type === TransactionType.BUY ? user.balanceGold + amount : user.balanceGold - amount;
     const newBalanceIRR = type === TransactionType.BUY ? user.balanceIRR - totalCost : user.balanceIRR + totalCost;
-
     const newTx: Transaction = {
       id: `tx-${Date.now()}`,
       userId: user.id,
@@ -114,13 +142,34 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       balanceAfterGold: newBalanceGold,
       balanceAfterIRR: newBalanceIRR
     };
-
     onAddTransaction(newTx);
     setUser(prev => ({ ...prev, balanceIRR: newBalanceIRR, balanceGold: newBalanceGold }));
     addNotification(`معامله ${type === TransactionType.BUY ? 'خرید' : 'فروش'} با موفقیت انجام شد.`);
     setTradeAmount('');
     setIsFrozen(false);
     setFreezeTime(0);
+  };
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-2xl text-[10px] space-y-1">
+          <p className="text-amber-500 font-bold border-b border-slate-700 pb-1 mb-1">{data.time}</p>
+          {chartType === 'area' ? (
+            <p className="text-slate-200">قیمت: <span className="font-mono">{data.price.toLocaleString()}</span></p>
+          ) : (
+            <>
+              <p className="text-slate-400">باز: <span className="text-slate-100 font-mono">{data.open.toLocaleString()}</span></p>
+              <p className="text-slate-400">بسته: <span className="text-slate-100 font-mono">{data.close.toLocaleString()}</span></p>
+              <p className="text-emerald-400">بالا: <span className="font-mono">{data.high.toLocaleString()}</span></p>
+              <p className="text-rose-400">پایین: <span className="font-mono">{data.low.toLocaleString()}</span></p>
+            </>
+          )}
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -171,26 +220,71 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-6">
           <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold flex items-center gap-2">
-                <BarChart3 className="text-amber-500" size={20} /> روند بازار
-              </h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <h3 className="font-bold flex items-center gap-2">
+                  <BarChart3 className="text-amber-500" size={20} /> روند بازار
+                </h3>
+                <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
+                  <button 
+                    onClick={() => setChartType('area')}
+                    className={`p-1.5 rounded-md transition-all ${chartType === 'area' ? 'bg-amber-500 text-slate-900' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    <AreaIcon size={16} />
+                  </button>
+                  <button 
+                    onClick={() => setChartType('candle')}
+                    className={`p-1.5 rounded-md transition-all ${chartType === 'candle' ? 'bg-amber-500 text-slate-900' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    <CandleIcon size={16} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                {['1H', '4H', '1D', '1W', '1M'].map((range) => (
+                  <button
+                    key={range}
+                    onClick={() => setTimeRange(range)}
+                    className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${timeRange === range ? 'bg-slate-700 text-amber-500 border border-amber-500/30' : 'text-slate-500 hover:bg-slate-700'}`}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="h-[280px]">
+            
+            <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={CHART_DATA}>
-                  <defs>
-                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="time" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} />
-                  <YAxis domain={['auto', 'auto']} stroke="#475569" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => (v/1000000).toFixed(1) + 'M'} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }} />
-                  <Area type="monotone" dataKey="price" stroke="#fbbf24" fill="url(#chartGradient)" strokeWidth={2} />
-                </AreaChart>
+                {chartType === 'area' ? (
+                  <AreaChart data={CHART_DATA}>
+                    <defs>
+                      <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="time" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} />
+                    <YAxis domain={['auto', 'auto']} stroke="#475569" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => (v/1000000).toFixed(1) + 'M'} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="price" stroke="#fbbf24" fill="url(#chartGradient)" strokeWidth={2} />
+                  </AreaChart>
+                ) : (
+                  <ComposedChart data={CHART_DATA}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="time" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} />
+                    <YAxis domain={['auto', 'auto']} stroke="#475569" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => (v/1000000).toFixed(1) + 'M'} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar
+                      dataKey={(d) => Math.abs(d.open - d.close)}
+                      shape={(props: any) => {
+                        const { payload } = props;
+                        return <Candlestick {...props} open={payload.open} close={payload.close} low={payload.low} high={payload.high} />;
+                      }}
+                    />
+                  </ComposedChart>
+                )}
               </ResponsiveContainer>
             </div>
           </div>
@@ -305,7 +399,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, transactions, onAddTrans
         </div>
       </div>
 
-      {/* Notifications */}
       <div className="fixed bottom-6 right-6 z-50 space-y-3">
         {notifications.map(n => (
           <div key={n.id} className={`border-r-4 p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300 ${n.msg.includes('خطا') ? 'bg-rose-950/90 border-rose-500' : 'bg-slate-900 border-amber-500'}`}>
